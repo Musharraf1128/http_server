@@ -49,4 +49,45 @@ class HTTPServer:
         self.server_socket = None
 
 
- 
+    def start(self):
+        # Start the HTTP server, bind to address, and begin accepting connections.
+        return None
+
+    def handle_client_wrapper(self, client_socket, client_address):
+        # Wrapper for handle_client that manages thread pool count and dequeuing.
+        return None    
+
+    def handle_client(self, client_socket, client_address):
+        # Handle a client connection, supporting persistent connections.
+        return None
+
+    def parse_request(self, request_text):
+        # Parse an HTTP request into its components.
+        return None
+
+    def handle_get(self, client_socket, path, headers, thread_id, keep_alive):
+        # Handle GET requests for serving files.
+        return None
+
+    def handle_post(self, client_socket, path, headers, body, thread_id, keep_alive):
+        # Handle POST requests for JSON data upload.
+        return None
+    
+    def send_response(self, client_socket, status_code, headers, body):
+        # Send an HTTP response to the client.
+        return None
+
+    def send_error(self, client_socket, status_code, message, thread_id, keep_alive=False):
+        # Send an HTTP error response.
+        return None
+
+
+
+
+
+
+
+
+
+
+
