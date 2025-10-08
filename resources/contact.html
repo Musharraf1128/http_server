@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Contact - My HTTP Server</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    label { display: block; margin-top: 10px; }
+    input, textarea { width: 300px; padding: 8px; margin-top: 5px; }
+    button { margin-top: 10px; padding: 8px 16px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Contact Us</h1>
+  <form method="POST" action="/upload">
+    <label for="name">Your Name:</label>
+    <input type="text" id="name" name="name" required>
+
+    <label for="message">Message:</label>
+    <textarea id="message" name="message" rows="4" required></textarea>
+
+    <label for="file">Upload a file:</label>
+    <input type="file" id="file" name="file">
+
+    <button type="submit">Send</button>
+  </form>
+
+  <p><a href="/index.html">Back to Home</a></p>
+</body>
+</html>

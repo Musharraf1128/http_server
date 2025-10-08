@@ -1,0 +1,6 @@
+Hello from your HTTP server!
+
+This is a simple text file served as a static resource.
+
+Try accessing this file in your browser via:
+http://localhost:PORT/sample.txt
