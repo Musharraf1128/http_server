@@ -86,13 +86,14 @@ curl -H "Host: evil.com" http://localhost:8080/
 
 ```
 project/
-├── server.py           # Main server implementation (600+ lines)
-├── README.md           # This file
-├── resources/          # Static files directory
+├── server.py               # Main server implementation (600+ lines)
+├── README.md               # This file
+├── resources/              # Static files directory
 │   ├── index.html
 │   ├── about.html
-│   ├── *.png, *.jpg
-│   └── uploads/        # POST uploads saved here
+|   ├── contact.html
+│   ├── *.png, *.jpg, *jpeg
+│   └── uploads/             # POST uploads saved here
 ```
 
 ## Known Limitations
