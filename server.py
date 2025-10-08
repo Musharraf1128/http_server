@@ -6,6 +6,7 @@ import threading
 import os
 from datetime import datetime
 import socket 
+import sys
 
 class HTTPServer:
         
@@ -312,6 +313,40 @@ class HTTPServer:
 
 
 
+def main():
+    # Main entry point for the HTTP server.
+    
+    # Default values
+    host = "127.0.0.1"
+    port = 8080
+    max_threads = 10
+    
+    # Parse command-line arguments
+    if len(sys.argv) > 1:
+        try:
+            port = int(sys.argv[1])
+        except ValueError:
+            print("Error: Port must be an integer")
+            sys.exit(1)
+    
+    if len(sys.argv) > 2:
+        host = sys.argv[2]
+    
+    if len(sys.argv) > 3:
+        try:
+            max_threads = int(sys.argv[3])
+        except ValueError:
+            print("Error: Max threads must be an integer")
+            sys.exit(1)
+    
+    # Create and start server
+    server = HTTPServer(host=host, port=port, max_threads=max_threads)
+    server.start()
+
+
+
+if __name__ == "__main__":
+    main()
 
 
 
