@@ -400,18 +400,69 @@ class HTTPServer:
             self.send_error(client_socket, 500, "Internal Server Error", thread_id, keep_alive)
     
 
+
     def handle_post(self, client_socket, path, headers, body, thread_id, keep_alive):
         # Handle POST requests for JSON data upload.
         return None
     
+
+
+
     def send_response(self, client_socket, status_code, headers, body):
         # Send an HTTP response to the client.
         return None
+        
+        # Build status line 
+        status_text = self.STATUS_CODES.get(status_code, "Unknown")
+        status_line = f"HTTP/1.1 {status_code} {status_text}\r\n"
+        
+        # Build headers
+        header_lines = []
+        for key, value in headers.items():
+            header_lines.append(f"{key}: {value}\r\n")
+        
+        # Combine status line, headers, and body
+        response = status_line.encode('utf-8')
+        response += ''.join(header_lines).encode('utf-8')
+        response += b'\r\n'
+        
+        # Add body
+        if isinstance(body, str):
+            response += body.encode('utf-8')
+        else:
+            response += body
+        
+        # Send response
+        client_socket.sendall(response)
+    
+
 
     def send_error(self, client_socket, status_code, message, thread_id, keep_alive=False):
         # Send an HTTP error response.
-        return None
-
+        
+        error_body = f"""<!DOCTYPE html>
+<html>
+<head><title>{status_code} {message}</title></head>
+<body>
+<h1>{status_code} {message}</h1>
+<p>The server encountered an error processing your request.</p>
+</body>
+</html>"""
+        
+        headers = {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Content-Length': str(len(error_body)),
+            'Date': self.get_http_date(),
+            'Server': 'Multi-threaded HTTP Server',
+            'Connection': 'keep-alive' if keep_alive else 'close'
+        }
+        
+        if status_code == 503:
+            headers['Retry-After'] = '10'
+        
+        self.send_response(client_socket, status_code, headers, error_body)
+        self.log(f"Response: {status_code} {message}", thread_id)
+    
 
 
 def main():
