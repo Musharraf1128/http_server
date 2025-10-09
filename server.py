@@ -7,6 +7,9 @@ import os
 from datetime import datetime
 import socket 
 import sys
+import json
+import hashlib
+import time 
 
 class HTTPServer:
         
@@ -403,9 +406,63 @@ class HTTPServer:
 
     def handle_post(self, client_socket, path, headers, body, thread_id, keep_alive):
         # Handle POST requests for JSON data upload.
-        return None
-    
 
+        # Check Content-Type
+        content_type = headers.get('content-type', '')
+        
+        if 'application/json' not in content_type:
+            self.log(f"Invalid Content-Type for POST: {content_type}", thread_id)
+            self.send_error(client_socket, 415, "Unsupported Media Type", thread_id, keep_alive)
+            return
+        
+        # Parse and validate JSON
+        try:
+            json_data = json.loads(body)
+        except json.JSONDecodeError:
+            self.log(f"Invalid JSON in request body", thread_id)
+            self.send_error(client_socket, 400, "Bad Request", thread_id, keep_alive)
+            return
+        
+        # Generate unique filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        random_id = hashlib.md5(str(time.time()).encode()).hexdigest()[:4]
+        filename = f"upload_{timestamp}_{random_id}.json"
+        filepath = os.path.join(self.uploads_dir, filename)
+        
+        try:
+            # Write JSON to file
+            with open(filepath, 'w') as f:
+                json.dump(json_data, f, indent=2)
+            
+            self.log(f"Created file: {filename}", thread_id)
+            
+            # Prepare response
+            response_data = {
+                "status": "success",
+                "message": "File created successfully",
+                "filepath": f"/uploads/{filename}"
+            }
+            
+            response_body = json.dumps(response_data).encode('utf-8')
+            
+            response_headers = {
+                'Content-Type': 'application/json',
+                'Content-Length': str(len(response_body)),
+                'Date': self.get_http_date(),
+                'Server': 'Multi-threaded HTTP Server',
+                'Connection': 'keep-alive' if keep_alive else 'close'
+            }
+            
+            if keep_alive:
+                response_headers['Keep-Alive'] = 'timeout=30, max=100'
+            
+            self.send_response(client_socket, 201, response_headers, response_body)
+            self.log(f"Response: 201 Created", thread_id)
+            
+        except Exception as e:
+            self.log(f"Error saving file: {e}", thread_id)
+            self.send_error(client_socket, 500, "Internal Server Error", thread_id, keep_alive)
+    
 
 
     def send_response(self, client_socket, status_code, headers, body):
