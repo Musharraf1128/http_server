@@ -293,11 +293,112 @@ class HTTPServer:
         return host_header in valid_hosts
  
 
+    def validate_path(self, path):
+        # Validate and sanitize the requested path to prevent directory traversal attacks.
+            
+        # Remove query string if present
+        path = path.split('?')[0]
+        
+        # Check for directory traversal patterns
+        if '..' in path or path.startswith('//'):
+            return None
+        
+        # Handle root path
+        if path == '/' or path == '':
+            path = '/index.html'
+        
+        # Remove leading slash for file system path
+        if path.startswith('/'):
+            path = path[1:]
+        
+        # Construct full path
+        full_path = os.path.join(self.resources_dir, path)
+        
+        # Canonicalize path
+        try:
+            full_path = os.path.abspath(full_path)
+            resources_path = os.path.abspath(self.resources_dir)
+            
+            # Ensure the path is within resources directory
+            if not full_path.startswith(resources_path):
+                return None
+            
+            return full_path
+        except Exception:
+            return None
     
+
+
+    def get_http_date(self):
+        # Get current date in RFC 7231 format for HTTP headers.
+        
+        from email.utils import formatdate
+        return formatdate(timeval=None, localtime=False, usegmt=True)
 
     def handle_get(self, client_socket, path, headers, thread_id, keep_alive):
         # Handle GET requests for serving files.
-        return None
+        
+        # Validate path
+        file_path = self.validate_path(path)
+        
+        if not file_path:
+            self.log(f"Path traversal attempt blocked: {path}", thread_id)
+            self.send_error(client_socket, 403, "Forbidden", thread_id, keep_alive)
+            return
+        
+        # Check if file exists
+        if not os.path.isfile(file_path):
+            self.log(f"File not found: {path}", thread_id)
+            self.send_error(client_socket, 404, "Not Found", thread_id, keep_alive)
+            return
+        
+        # Get file extension
+        _, ext = os.path.splitext(file_path)
+        ext = ext.lower()
+        
+        # Check if file type is supported
+        if ext not in self.CONTENT_TYPES:
+            self.log(f"Unsupported file type: {ext}", thread_id)
+            self.send_error(client_socket, 415, "Unsupported Media Type", thread_id, keep_alive)
+            return
+        
+        try:
+            # Read file in binary mode
+            with open(file_path, 'rb') as f:
+                file_data = f.read()
+            
+            file_size = len(file_data)
+            content_type = self.CONTENT_TYPES[ext]
+            filename = os.path.basename(file_path)
+            
+            # Prepare response headers
+            response_headers = {
+                'Content-Type': content_type,
+                'Content-Length': str(file_size),
+                'Date': self.get_http_date(),
+                'Server': 'Multi-threaded HTTP Server',
+                'Connection': 'keep-alive' if keep_alive else 'close'
+            }
+            
+            # Add Keep-Alive header if connection persists
+            if keep_alive:
+                response_headers['Keep-Alive'] = 'timeout=30, max=100'
+            
+            # For binary files, add Content-Disposition header
+            if content_type == 'application/octet-stream':
+                response_headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+                self.log(f"Sending binary file: {filename} ({file_size} bytes)", thread_id)
+            else:
+                self.log(f"Serving HTML file: {filename} ({file_size} bytes)", thread_id)
+            
+            # Send response
+            self.send_response(client_socket, 200, response_headers, file_data)
+            self.log(f"Response: 200 OK ({file_size} bytes transferred)", thread_id)
+            
+        except Exception as e:
+            self.log(f"Error reading file: {e}", thread_id)
+            self.send_error(client_socket, 500, "Internal Server Error", thread_id, keep_alive)
+    
 
     def handle_post(self, client_socket, path, headers, body, thread_id, keep_alive):
         # Handle POST requests for JSON data upload.
