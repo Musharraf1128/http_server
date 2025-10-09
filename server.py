@@ -410,8 +410,7 @@ class HTTPServer:
 
     def send_response(self, client_socket, status_code, headers, body):
         # Send an HTTP response to the client.
-        return None
-        
+
         # Build status line 
         status_text = self.STATUS_CODES.get(status_code, "Unknown")
         status_line = f"HTTP/1.1 {status_code} {status_text}\r\n"
