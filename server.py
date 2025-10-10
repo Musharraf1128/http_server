@@ -1,18 +1,49 @@
 #!/usr/bin/env python3
+"""
+Multi-threaded HTTP Server Implementation
+Author: Shah Musharaf ul islam
+Date: October 2025
 
+This server implements a full-featured HTTP/1.1 server with:
+- Multi-threading with configurable thread pool
+- GET and POST request handling
+- Binary file transfer support
+- JSON processing for POST requests
+- Connection persistence (keep-alive)
+- Security features (path traversal protection, host validation)
+- Comprehensive logging
+"""
+
+import socket
+import threading
+import sys
+import os
+import json
+import time
+from datetime import datetime
+from pathlib import Path
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
-import threading
-import os
-from datetime import datetime
-import socket 
-import sys
-import json
 import hashlib
-import time 
+import re
+
 
 class HTTPServer:
-        
+    """
+    Main HTTP Server class that handles incoming connections and routes requests.
+    
+    Attributes:
+        host (str): Server host address
+        port (int): Server port number
+        max_threads (int): Maximum number of worker threads
+        resources_dir (str): Directory containing servable files
+        thread_pool (ThreadPoolExecutor): Pool of worker threads
+        server_socket (socket): Main server socket
+        connection_queue (Queue): Queue for pending connections
+        active_threads (int): Count of currently active threads
+        lock (Lock): Thread lock for synchronization
+    """
+    
     # HTTP Status codes
     STATUS_CODES = {
         200: "OK",
@@ -36,6 +67,14 @@ class HTTPServer:
     }
     
     def __init__(self, host="127.0.0.1", port=8080, max_threads=10):
+        """
+        Initialize the HTTP server with configuration parameters.
+        
+        Args:
+            host (str): Host address to bind to
+            port (int): Port number to listen on
+            max_threads (int): Maximum number of worker threads
+        """
         self.host = host
         self.port = port
         self.max_threads = max_threads
@@ -53,23 +92,25 @@ class HTTPServer:
         
         # Server socket (initialized in start())
         self.server_socket = None
-
-    
-
-    def log(self, message, thread_id=None):
-        # Log a message with timestamp and optional thread ID.
         
+    def log(self, message, thread_id=None):
+        """
+        Log a message with timestamp and optional thread ID.
+        
+        Args:
+            message (str): Message to log
+            thread_id (str, optional): Thread identifier for thread-specific logs
+        """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if thread_id:
             print(f"[{timestamp}] [{thread_id}] {message}")
         else:
             print(f"[{timestamp}] {message}")
-
     
-
     def start(self):
-        # Start the HTTP server, bind to address, and begin accepting connections.
-
+        """
+        Start the HTTP server, bind to address, and begin accepting connections.
+        """
         try:
             # Create TCP socket
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -119,12 +160,15 @@ class HTTPServer:
             if self.server_socket:
                 self.server_socket.close()
             self.thread_pool.shutdown(wait=True)
-        
     
-
     def handle_client_wrapper(self, client_socket, client_address):
-        # Wrapper for handle_client that manages thread pool count and dequeuing.
-            
+        """
+        Wrapper for handle_client that manages thread pool count and dequeuing.
+        
+        Args:
+            client_socket (socket): Client socket connection
+            client_address (tuple): Client address (IP, port)
+        """
         try:
             self.handle_client(client_socket, client_address)
         finally:
@@ -142,12 +186,15 @@ class HTTPServer:
                         queued_socket,
                         queued_address
                     )
-
     
-
     def handle_client(self, client_socket, client_address):
-        # Handle a client connection, supporting persistent connections.
+        """
+        Handle a client connection, supporting persistent connections.
         
+        Args:
+            client_socket (socket): Client socket connection
+            client_address (tuple): Client address (IP, port)
+        """
         thread_id = threading.current_thread().name
         self.log(f"Connection from {client_address[0]}:{client_address[1]}", thread_id)
         
@@ -221,11 +268,16 @@ class HTTPServer:
             client_socket.close()
             self.log(f"Connection closed", thread_id)
     
-
-    
     def parse_request(self, request_text):
-        # Parse an HTTP request into its components.
+        """
+        Parse an HTTP request into its components.
         
+        Args:
+            request_text (str): Raw HTTP request text
+            
+        Returns:
+            tuple: (method, path, version, headers_dict, body) or None if invalid
+        """
         try:
             # Split request into lines
             lines = request_text.split('\r\n')
@@ -260,23 +312,16 @@ class HTTPServer:
         except Exception:
             return None
     
-    
-
-    def should_keep_alive(self, version, headers):
-        # Determine if connection should be kept alive based on HTTP version and headers.
-            
-        connection_header = headers.get('connection', '').lower()
-        if version == "HTTP/1.1":
-            # HTTP/1.1 defaults to keep-alive unless explicitly closed
-            return connection_header != 'close'
-        else:
-            # HTTP/1.0 defaults to close unless explicitly keep-alive
-            return connection_header == 'keep-alive'
- 
-
     def validate_host(self, headers):
-        # Validate the Host header matches the server's address.
+        """
+        Validate the Host header matches the server's address.
         
+        Args:
+            headers (dict): Request headers
+            
+        Returns:
+            bool: True if valid, False otherwise
+        """
         if 'host' not in headers:
             return False
         
@@ -294,11 +339,37 @@ class HTTPServer:
             valid_hosts.extend([self.host, "localhost", "127.0.0.1"])
         
         return host_header in valid_hosts
- 
-
-    def validate_path(self, path):
-        # Validate and sanitize the requested path to prevent directory traversal attacks.
+    
+    def should_keep_alive(self, version, headers):
+        """
+        Determine if connection should be kept alive based on HTTP version and headers.
+        
+        Args:
+            version (str): HTTP version
+            headers (dict): Request headers
             
+        Returns:
+            bool: True if connection should persist, False otherwise
+        """
+        connection_header = headers.get('connection', '').lower()
+        
+        if version == "HTTP/1.1":
+            # HTTP/1.1 defaults to keep-alive unless explicitly closed
+            return connection_header != 'close'
+        else:
+            # HTTP/1.0 defaults to close unless explicitly keep-alive
+            return connection_header == 'keep-alive'
+    
+    def validate_path(self, path):
+        """
+        Validate and sanitize the requested path to prevent directory traversal attacks.
+        
+        Args:
+            path (str): Requested file path
+            
+        Returns:
+            str or None: Safe absolute path or None if invalid
+        """
         # Remove query string if present
         path = path.split('?')[0]
         
@@ -330,17 +401,17 @@ class HTTPServer:
         except Exception:
             return None
     
-
-
-    def get_http_date(self):
-        # Get current date in RFC 7231 format for HTTP headers.
-        
-        from email.utils import formatdate
-        return formatdate(timeval=None, localtime=False, usegmt=True)
-
     def handle_get(self, client_socket, path, headers, thread_id, keep_alive):
-        # Handle GET requests for serving files.
+        """
+        Handle GET requests for serving files.
         
+        Args:
+            client_socket (socket): Client socket
+            path (str): Requested path
+            headers (dict): Request headers
+            thread_id (str): Thread identifier
+            keep_alive (bool): Whether to keep connection alive
+        """
         # Validate path
         file_path = self.validate_path(path)
         
@@ -402,11 +473,18 @@ class HTTPServer:
             self.log(f"Error reading file: {e}", thread_id)
             self.send_error(client_socket, 500, "Internal Server Error", thread_id, keep_alive)
     
-
-
     def handle_post(self, client_socket, path, headers, body, thread_id, keep_alive):
-        # Handle POST requests for JSON data upload.
-
+        """
+        Handle POST requests for JSON data upload.
+        
+        Args:
+            client_socket (socket): Client socket
+            path (str): Requested path
+            headers (dict): Request headers
+            body (str): Request body
+            thread_id (str): Thread identifier
+            keep_alive (bool): Whether to keep connection alive
+        """
         # Check Content-Type
         content_type = headers.get('content-type', '')
         
@@ -463,12 +541,17 @@ class HTTPServer:
             self.log(f"Error saving file: {e}", thread_id)
             self.send_error(client_socket, 500, "Internal Server Error", thread_id, keep_alive)
     
-
-
     def send_response(self, client_socket, status_code, headers, body):
-        # Send an HTTP response to the client.
-
-        # Build status line 
+        """
+        Send an HTTP response to the client.
+        
+        Args:
+            client_socket (socket): Client socket
+            status_code (int): HTTP status code
+            headers (dict): Response headers
+            body (bytes or str): Response body
+        """
+        # Build status line
         status_text = self.STATUS_CODES.get(status_code, "Unknown")
         status_line = f"HTTP/1.1 {status_code} {status_text}\r\n"
         
@@ -491,11 +574,17 @@ class HTTPServer:
         # Send response
         client_socket.sendall(response)
     
-
-
     def send_error(self, client_socket, status_code, message, thread_id, keep_alive=False):
-        # Send an HTTP error response.
+        """
+        Send an HTTP error response.
         
+        Args:
+            client_socket (socket): Client socket
+            status_code (int): HTTP status code
+            message (str): Error message
+            thread_id (str): Thread identifier
+            keep_alive (bool): Whether to keep connection alive
+        """
         error_body = f"""<!DOCTYPE html>
 <html>
 <head><title>{status_code} {message}</title></head>
@@ -519,11 +608,22 @@ class HTTPServer:
         self.send_response(client_socket, status_code, headers, error_body)
         self.log(f"Response: {status_code} {message}", thread_id)
     
+    def get_http_date(self):
+        """
+        Get current date in RFC 7231 format for HTTP headers.
+        
+        Returns:
+            str: Formatted date string
+        """
+        from email.utils import formatdate
+        return formatdate(timeval=None, localtime=False, usegmt=True)
 
 
 def main():
-    # Main entry point for the HTTP server.
-    
+    """
+    Main entry point for the HTTP server.
+    Parses command-line arguments and starts the server.
+    """
     # Default values
     host = "127.0.0.1"
     port = 8080
@@ -552,14 +652,5 @@ def main():
     server.start()
 
 
-
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
