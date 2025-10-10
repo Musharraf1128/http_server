@@ -106,8 +106,10 @@ project/
 
 ## Author
 
-**Razor** - October 2025  
-Educational project for Network Programming course
+**Shah Musharaf ul islam** - October 2025
+**Batch A**
+**10447**
+Class project for Network Programming course
 
 ---
 
